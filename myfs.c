@@ -81,11 +81,11 @@ int roundup(int x, int y) {
 
 
 int main(int argc, char *argv[]){
-    
+  
   inode_t* cur_dir_inode = NULL;
 
   myfs_t* myfs = my_mkfs(100*BLKSIZE, 10);
-
+  
   // create 2 dirs inside [/] (root dir)
   int cur_dir_inode_number = 2;  // root inode
   my_creatdir(myfs, cur_dir_inode_number, "mystuff");  // will be inode 3
@@ -318,20 +318,28 @@ void my_crawlfs(myfs_t* myfs) {
 void my_creatdir(myfs_t* myfs, int cur_dir_inode_number, const char* new_dirname)
 {
   // STEP 1
+  printf("Works");
   void* imap_ptr = malloc(BLKSIZE);
   memcpy(imap_ptr, &myfs->imap, BLKSIZE);
   block_t* imap = (block_t*)imap_ptr;
-
+  int temp_count = -1;
+  int found = 0;
   for (size_t byte = 0; byte < BLKSIZE; ++byte)
   {
-    for (uint bit = 0; bit < 8; ++bit)
-    {
-      if (!(imap->data[byte] & (1 << bit)))
+      for (uint bit = 0; bit < 8; ++bit)
       {
-        imap->data[byte] |= (1 << bit);
+          if (!(imap->data[byte] & (1 << bit)))
+          {
+              temp_count = byte * 8 + bit;
+              imap->data[byte] |= (1 << bit);
+              found = 1;
+              break;
+          }
+      }
+      if(found)
+      {
         break;
       }
-    }
   }
   memcpy(&myfs->imap, imap_ptr, BLKSIZE);
   free(imap_ptr);
@@ -339,23 +347,53 @@ void my_creatdir(myfs_t* myfs, int cur_dir_inode_number, const char* new_dirname
   // STEP 2
   void* bmap_ptr = malloc(BLKSIZE);
   memcpy(bmap_ptr, &myfs->bmap, BLKSIZE);
-  block_t* bmap = (block_t*)bmap_ptr;  
-  for (size_t byte = 0; byte < BLKSIZE; ++byte)
-  {
-    for (uint bit = 0; bit < 8; ++bit)
-    {
-      if (!(bmap->data[byte] & (1 << bit)))
+  block_t* bmap = (block_t*)bmap_ptr; 
+  int temp_count2 = -1;
+  int found2 = 0;
+  for (size_t byte = 0; byte < BLKSIZE; ++byte) {
+      for (uint bit = 0; bit < 8; ++bit) {
+          if (!(bmap->data[byte] & (1 << bit))) {
+              temp_count2 = byte * 8 + bit;
+              bmap->data[byte] |= (1 << bit);
+              found2 = 1;
+              break;
+          }
+      }
+      if (found2)
       {
-        bmap->data[byte] |= (1 << bit);
         break;
       }
-    }
   }
   memcpy(&myfs->bmap, bmap_ptr, BLKSIZE);
   free(bmap_ptr);
   //STEP 3
   inode_t* inodetable = myfs->groupdescriptor.groupdescriptor_info.inode_table;
+  inode_t* parent_inode = &inodetable[cur_dir_inode_number];
+  inode_t* new_inode = &inodetable[temp_count];
 
+  parent_inode->size += sizeof(dirent_t);
+  new_inode->size = sizeof(dirent_t) * 2;
+  new_inode->blocks = 1;
+  new_inode->data[0] = &myfs->groupdescriptor.groupdescriptor_info.block_data[temp_count2];
+  //STEP 4
+  dirent_t* myParentDirectory = (dirent_t*)parent_inode->data[0];
+  int index = parent_inode->size / sizeof(dirent_t);
+  myParentDirectory[index - 1].inode = temp_count;
+  myParentDirectory[index - 1].file_type = 2;
+  myParentDirectory[index - 1].name_len = strlen(new_dirname);
+  strcpy(myParentDirectory[index - 1].name, new_dirname);
+  //STEP 5
+  void* new_dir_ptr = calloc(BLKSIZE, sizeof(char));
+  dirent_t* new_dir = (dirent_t*)new_dir_ptr;
+  new_dir[0].inode = temp_count;
+  new_dir[0].file_type = 2;
+  new_dir[0].name_len = 1;
+  strcpy(new_dir[0].name, ".");
+
+  new_dir[1].inode = cur_dir_inode_number;
+  new_dir[1].file_type = 2;
+  new_dir[1].name_len = 2;
+  strcpy(new_dir[1].name, "..");
+  memcpy(new_inode->data[0], new_dir_ptr, BLKSIZE);
+  free(new_dir_ptr);
 }
-
-
