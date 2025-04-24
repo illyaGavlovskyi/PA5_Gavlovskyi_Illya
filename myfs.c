@@ -315,8 +315,47 @@ void my_crawlfs(myfs_t* myfs) {
 }
 
 // IMPLEMENT THIS FUNCTION
-void my_creatdir(myfs_t* myfs, int cur_dir_inode_number, const char* new_dirname) {
-  
+void my_creatdir(myfs_t* myfs, int cur_dir_inode_number, const char* new_dirname)
+{
+  // STEP 1
+  void* imap_ptr = malloc(BLKSIZE);
+  memcpy(imap_ptr, &myfs->imap, BLKSIZE);
+  block_t* imap = (block_t*)imap_ptr;
+
+  for (size_t byte = 0; byte < BLKSIZE; ++byte)
+  {
+    for (uint bit = 0; bit < 8; ++bit)
+    {
+      if (!(imap->data[byte] & (1 << bit)))
+      {
+        imap->data[byte] |= (1 << bit);
+        break;
+      }
+    }
+  }
+  memcpy(&myfs->imap, imap_ptr, BLKSIZE);
+  free(imap_ptr);
+
+  // STEP 2
+  void* bmap_ptr = malloc(BLKSIZE);
+  memcpy(bmap_ptr, &myfs->bmap, BLKSIZE);
+  block_t* bmap = (block_t*)bmap_ptr;  
+  for (size_t byte = 0; byte < BLKSIZE; ++byte)
+  {
+    for (uint bit = 0; bit < 8; ++bit)
+    {
+      if (!(bmap->data[byte] & (1 << bit)))
+      {
+        bmap->data[byte] |= (1 << bit);
+        break;
+      }
+    }
+  }
+  memcpy(&myfs->bmap, bmap_ptr, BLKSIZE);
+  free(bmap_ptr);
+  //STEP 3
+  inode_t* inodetable = myfs->groupdescriptor.groupdescriptor_info.inode_table;
+
 }
 
 
